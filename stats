@@ -1,0 +1,155 @@
+#!/bin/bash
+
+# CS344-400
+# Program 1
+# Author: Bolan Peng
+
+
+
+################# Function definitions #########################
+
+# calculate average and median based on rows
+function rows {	
+  printf "%-8s %-8s\n" Average Median
+
+  while read line
+  do
+    TMP=./TMP$$
+    sum=0
+	  
+    # count: the total number of elements on the line
+    count=0
+	 
+    # read each line (row)
+    IFS='	' read -ra field <<< "$line"
+
+    # for each element on the line, add it to that line's sum
+    for i in "${field[@]}"
+    do
+      sum=$(( sum + i ))
+      let count++
+      # temporarily store each number in a one value per line format
+      echo -e "$i" >> TMP$$
+    done
+
+    # calculate the average of each line
+    ave=$(( (sum + (count / 2) ) / count ))  
+	  
+    # calculate the median of each line
+    # if there's an even number of data values
+    # 1. sort the TMP file (containing all the values of a line)
+    # 2. get only the last half of the sorted file
+    # 3. get only the first value of the last half, which is the median
+    if (( $count % 2 == 0 )); then
+      median=$(sort -n < TMP$$ | tail -n $(( (1+count) / 2 )) | head -n 1)
+    # if there's an odd number of data values
+    else      
+      median=$(sort -n < TMP$$ | head -n $(( (1+count) / 2 )) | tail -n 1)
+    fi
+	  
+    printf "%-8d %-8d\n" $ave $median
+	  
+    # remove the TMP file to start fresh for the next line
+    rm -f TMP$$
+
+  done < $filename
+}
+
+
+# calculate average and median based on columns
+function cols {	
+  TMP=./TMP$$
+  AVE=./AVE$$
+  MED=./MED$$
+	
+  # get the first line of the file, and count the number of data values
+  # we only need to read the first line because all lines are uniform
+  line=$(head -n 1 $filename)
+  wordCount=$(echo $line | wc -w)
+  
+  # loop from 1 to the maximum number of data (or the number of columns)
+  for i in `seq 1 $wordCount`
+  do
+    # take one column at a time, convert into a single line and add '+' between values to perform addition
+    sum=$(( $(cut -f $i $filename | paste -sd+) ))
+   
+    # calculate the average and store it into a temporary file, AVE
+    echo -ne "$(( (sum + (lineCount / 2) ) / lineCount ))\t" >> AVE$$
+    
+    # temporarily store one column to TMP file
+    echo "$(cut -f $i $filename)" >> TMP$$
+    
+    # if there is an even number of data values, the median is the larger of the middle two values
+    if (( $lineCount % 2 == 0 )); then
+      echo -ne "$(sort -n < TMP$$ | tail -n $(( (1+lineCount) / 2 )) | head -n 1)\t" >> MED$$
+      
+    # else if there is an odd number of data values, the median is the middle value
+    else
+      echo -ne "$(sort -n < TMP$$ | head -n $(( (1+lineCount) / 2 )) | tail -n 1)\t" >> MED$$
+    fi
+    
+    # remove TMP to start fresh for the next column
+    rm -f TMP$$  
+  done
+  
+  printf "%s\n" Averages:
+  # if AVE file is not empty, display it
+  if [[ -e "$AVE" ]]; then cat AVE$$
+  fi
+  
+  printf "\n%s\n" Medians:
+  if [[ -e "$MED" ]]; then cat MED$$
+  fi
+  
+  printf "\n"
+  
+  # remove temporary files
+  rm -f AVE$$ MED$$
+}
+
+
+function usage {
+  echo "Usage: $0 {-rows|-cols} [file]" 1>&2
+}
+
+
+
+#################### Main part of the program ######################
+
+# cleanup temporary files in case the program is terminated unexpectedly
+trap "rm -f $TMP*$$ $AVE*$$ $MED*$$; exit 1" INT HUP TERM
+
+# buffer
+filename=""
+lineCount=""
+
+# if the number of arguments received is greater than 2, exit
+if [[ $# -gt 2 ]]; then
+  usage
+  exit 1
+fi
+
+# if the file does not exists and is not readable
+if [[ ! -z $2 && ! -r $2 ]]; then 
+  echo "$0: cannot read $2" 1>&2
+  exit 1
+fi
+
+# if the first argument begins with r
+if [[ "$1" =~ ^-r.* ]]; then	
+  # if the 2nd argument (the filename) is not set, read from standard input
+  filename="${2-/dev/stdin}"
+  rows
+
+# else if the first argument begins with c
+elif [[ "$1" =~ ^-c.* ]]; then
+  filename="${2-/dev/stdin}"
+  # count the number of lines in the file 
+  lineCount=$(wc -l < "$filename")
+  cols
+
+# if nothing matches, tell the user the proper usage of this script
+else 
+  usage
+  exit 1
+fi
