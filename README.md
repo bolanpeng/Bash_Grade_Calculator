@@ -1,4 +1,4 @@
-#Usage
+# Usage
 Before running this program, make sure that you are using Bash as your shell.
 
 `stats {-rows|-cols} [input_file]`
